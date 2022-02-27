@@ -176,9 +176,7 @@ def eval(dataset_split, config_files, watch, from_global_step, override_params,
             raise e
 
         tf.logging.warning(
-            'Missing checkpoint; Checking again in a moment')
-        time.sleep(5)
-        continue
+            'Missing checkpoint!')
 
     for checkpoint in checkpoints:
         # Always returned in order, so it's safe to assign directly.
