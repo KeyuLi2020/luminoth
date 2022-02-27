@@ -165,62 +165,60 @@ def eval(dataset_split, config_files, watch, from_global_step, override_params,
     files_to_visualize = {}
 
     last_global_step = from_global_step
-    while True:
-        # Get the checkpoint files to evaluate.
-        try:
-            checkpoints = get_checkpoints(
-                run_dir, last_global_step, last_only=not watch
-            )
-        except ValueError as e:
-            if not watch:
-                tf.logging.error('Missing checkpoint.')
-                raise e
+    # Get the checkpoint files to evaluate.
+    try:
+        checkpoints = get_checkpoints(
+            run_dir, last_global_step, last_only=not watch
+        )
+    except ValueError as e:
+        if not watch:
+            tf.logging.error('Missing checkpoint.')
+            raise e
 
-            tf.logging.warning(
-                'Missing checkpoint; Checking again in a moment')
+        tf.logging.warning(
+            'Missing checkpoint; Checking again in a moment')
+        time.sleep(5)
+        continue
+
+    for checkpoint in checkpoints:
+        # Always returned in order, so it's safe to assign directly.
+        tf.logging.info(
+            'Evaluating global_step {} using checkpoint \'{}\''.format(
+                checkpoint['global_step'], checkpoint['file']
+            )
+        )
+        try:
+            start = time.time()
+            evaluate_once(
+                config, writer, saver, ops, checkpoint,
+                class_labels=class_labels,
+                metrics_scope=metrics_scope,
+                image_vis=config.eval.image_vis,
+                files_per_class=files_per_class,
+                files_to_visualize=files_to_visualize,
+            )
+            last_global_step = checkpoint['global_step']
+            tf.logging.info('Evaluated in {:.2f}s'.format(
+                time.time() - start
+            ))
+        except tf.errors.NotFoundError:
+            # The checkpoint is not ready yet. It was written in the
+            # checkpoints file, but it still hasn't been completely saved.
+            tf.logging.info(
+                'Checkpoint {} is not ready yet. '
+                'Checking again in a moment.'.format(
+                    checkpoint['file']
+                )
+            )
             time.sleep(5)
             continue
 
-        for checkpoint in checkpoints:
-            # Always returned in order, so it's safe to assign directly.
-            tf.logging.info(
-                'Evaluating global_step {} using checkpoint \'{}\''.format(
-                    checkpoint['global_step'], checkpoint['file']
-                )
-            )
-            try:
-                start = time.time()
-                evaluate_once(
-                    config, writer, saver, ops, checkpoint,
-                    class_labels=class_labels,
-                    metrics_scope=metrics_scope,
-                    image_vis=config.eval.image_vis,
-                    files_per_class=files_per_class,
-                    files_to_visualize=files_to_visualize,
-                )
-                last_global_step = checkpoint['global_step']
-                tf.logging.info('Evaluated in {:.2f}s'.format(
-                    time.time() - start
-                ))
-            except tf.errors.NotFoundError:
-                # The checkpoint is not ready yet. It was written in the
-                # checkpoints file, but it still hasn't been completely saved.
-                tf.logging.info(
-                    'Checkpoint {} is not ready yet. '
-                    'Checking again in a moment.'.format(
-                        checkpoint['file']
-                    )
-                )
-                time.sleep(5)
-                continue
+    # If no watching was requested, finish the execution.
+    if not watch:
+        return
 
-        # If no watching was requested, finish the execution.
-        if not watch:
-            return
-
-        # Sleep for a moment and check for new checkpoints.
-        tf.logging.info('All checkpoints evaluated; sleeping for a moment')
-        time.sleep(5)
+    # Sleep for a moment and check for new checkpoints.
+    tf.logging.info('All checkpoints evaluated.')
 
 
 def get_checkpoints(run_dir, from_global_step=None, last_only=False):
